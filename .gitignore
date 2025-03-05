@@ -1,0 +1,8 @@
+# Ignorar archivos de credenciales
+credenciales.json
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3

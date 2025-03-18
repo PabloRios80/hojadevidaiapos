@@ -2,33 +2,10 @@ import streamlit as st
 from datetime import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from dotenv import load_dotenv
-import os
-import json
-
-# Cargar las variables de entorno desde el archivo .env
-load_dotenv()
 
 # Configuración de Google Sheets
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-
-# Crear credenciales desde las variables de entorno
-creds_dict = {
-    "type": os.getenv("TYPE"),
-    "project_id": os.getenv("PROJECT_ID"),
-    "private_key_id": os.getenv("PRIVATE_KEY_ID"),
-    "private_key": os.getenv("PRIVATE_KEY").replace("\\n", "\n"),  # Asegúrate de manejar los saltos de línea
-    "client_email": os.getenv("CLIENT_EMAIL"),
-    "client_id": os.getenv("CLIENT_ID"),
-    "auth_uri": os.getenv("AUTH_URI"),
-    "token_uri": os.getenv("TOKEN_URI"),
-    "auth_provider_x509_cert_url": os.getenv("AUTH_PROVIDER_X509_CERT_URL"),
-    "client_x509_cert_url": os.getenv("CLIENT_X509_CERT_URL"),
-    "universe_domain": os.getenv("UNIVERSE_DOMAIN")
-}
-
-# Crear credenciales
-creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+creds = ServiceAccountCredentials.from_json_keyfile_name("nuevas_credenciales.json", scope)
 client = gspread.authorize(creds)
 
 # Abrir las hojas de cálculo
@@ -38,9 +15,7 @@ try:
 except gspread.exceptions.SpreadsheetNotFound:
     st.error("No se encontró la hoja de cálculo. Verifica el nombre y los permisos.")
     st.stop()
-except Exception as e:
-    st.error(f"Error al acceder a Google Sheets: {e}")
-    st.stop()
+
 def calcular_imc(peso, altura):
     """Calcula el IMC y devuelve categoría con estilo"""
     if altura == 0:

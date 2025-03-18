@@ -1,18 +1,14 @@
 # Ignorar credenciales
-credentials.json
+nuevas_credenciales.json
 .env
 
-# Ignorar configuraciones de VSCode
+# Ignorar configuraciones y archivos innecesarios
 .vscode/
-
-# Ignorar archivos de Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 *.db
 *.sqlite3
-
-# Ignorar archivos de entorno virtual
 venv/
 env/

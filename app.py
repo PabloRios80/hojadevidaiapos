@@ -65,6 +65,69 @@ def verificar_dni_existente(dni):
     except Exception as e:
         st.error(f"Error al acceder a la base de datos: {e}")
         return False
+
+def cargar_resultados():
+    """Interfaz para cargar resultados de estudios"""
+    st.header("📤 Cargar Resultados de Estudios")
+    
+    # Verificar si los datos personales están disponibles
+    if 'datos_personales' not in st.session_state or 'DNI' not in st.session_state.datos_personales:
+        st.warning("Por favor, complete el registro del paciente antes de cargar resultados.")
+        return
+    
+    # Obtener datos del paciente
+    datos = st.session_state.datos_personales
+    dni = datos['DNI']
+    
+    # Cargar datos dinámicos desde Google Sheets
+    try:
+        sheet_config = client.open("HistorialesMedicos").worksheet("Configuraciones")
+        instituciones = sheet_config.col_values(1)[1:]  # Ignorar encabezado
+        tipos_estudio = sheet_config.col_values(2)[1:]  # Ignorar encabezado
+    except Exception as e:
+        st.error(f"Error cargando configuraciones: {str(e)}")
+        return
+    
+    # Usar el DNI como parte de la clave para hacerla única
+    with st.form(f"form_resultados_{dni}"):  # Clave única para el formulario
+        # Campos del formulario
+        profesional = st.text_input("Nombre del Profesional*")
+        institucion = st.selectbox("Institución*", instituciones)
+        fecha_estudio = st.date_input("Fecha del Estudio*")
+        tipo_estudio = st.selectbox("Tipo de Estudio*", tipos_estudio)
+        archivo = st.file_uploader("Subir Archivo (PDF)*", type="pdf")
+        comentarios = st.text_area("Comentarios Adicionales")
+        
+        # Botón de envío (debe estar dentro del bloque st.form)
+        if st.form_submit_button("Guardar Resultado"):
+            if not all([profesional, institucion, tipo_estudio, archivo]):
+                st.error("Complete todos los campos obligatorios")
+            else:
+                try:
+                    # Verificar si se subió un archivo
+                    if archivo is None:
+                        st.error("Por favor, suba un archivo PDF.")
+                    else:
+                        # Guardar en Google Sheets
+                        sheet_resultados.append_row([
+                            dni,
+                            profesional,
+                            institucion,
+                            fecha_estudio.strftime("%Y-%m-%d"),
+                            tipo_estudio,
+                            archivo.name,  # Nombre del archivo
+                            comentarios
+                        ])
+                        
+                        # Guardar archivo en Streamlit (opcional)
+                        with open(f"archivos/{archivo.name}", "wb") as f:
+                            f.write(archivo.getbuffer())
+                        
+                        st.success("Resultado guardado exitosamente!")
+                        st.session_state.mostrar_formulario_resultados = False  # Ocultar formulario después de guardar
+                except Exception as e:
+                    st.error(f"Error guardando resultado: {str(e)}")
+
 def generar_recomendaciones_paciente(nombre, condiciones, imc):
     """Genera recomendaciones personalizadas para el paciente"""
     recomendaciones = []
@@ -119,6 +182,7 @@ def generar_recomendaciones_equipo_salud(datos, respuestas):
         recomendaciones.append("🩺 **Prevención cardiovascular:** Tomar presión arterial en ambos brazos, medir peso y altura, indicar colesterol total y HDL")
     
     return recomendaciones
+
 def find_dni_row(sheet, dni):
     """Busca DNI ignorando formatos y espacios"""
     try:
@@ -177,10 +241,14 @@ def update_record(sheet, row, datos_medicos):
     except Exception as e:
         st.error(f"Error actualizando registro: {str(e)}")
         return False
-
+    
 def main():
     st.title("Sistema Integrado de Salud")
     
+    # Inicializar el estado de sesión si no existe
+    if 'mostrar_formulario_resultados' not in st.session_state:
+        st.session_state.mostrar_formulario_resultados = False
+        
     if 'paso_actual' not in st.session_state:
         st.session_state.update({
             'paso_actual': 1,
@@ -373,21 +441,21 @@ def main():
         datos = st.session_state.datos_personales
         respuestas = st.session_state.respuestas_medicas
         nombre_completo = f"{datos['Nombre']} {datos.get('Apellido', '')}".strip()
-        
+    
         st.subheader(f"👤 Resumen de {nombre_completo}")
         st.markdown(f"""
         - **Edad:** {respuestas['edad']} años
         - **IMC:** {respuestas['imc_val']:.1f} ({respuestas['imc_cat']})
         - **Contacto:** {datos['Email']} | {datos['Telefono']}
         """)
-        
+    
         st.subheader("🩺 Recomendaciones Preventivas")
         recomendaciones = generar_recomendaciones_paciente(
             nombre_completo, 
             respuestas['condiciones'],
             respuestas['imc_val']
         )
-        
+    
         for rec in recomendaciones:
             if "Obesidad" in rec or "🔥" in rec:
                 st.error(rec)
@@ -395,11 +463,12 @@ def main():
                 st.warning(rec)
             else:
                 st.success(rec)
-        
+    
         col_botones = st.columns([1, 1, 1])
         with col_botones[0]:
             if st.button("← Volver al cuestionario"):
                 st.session_state.paso_actual = 2
+                st.session_state.mostrar_formulario_resultados = False  # Ocultar formulario
                 st.rerun()
         with col_botones[1]:
             if st.button("🔄 Nueva evaluación"):
@@ -408,8 +477,15 @@ def main():
         with col_botones[2]:
             if st.button("📤 Ver recomendaciones equipo"):
                 st.session_state.paso_actual = 4
+                st.session_state.mostrar_formulario_resultados = False  # Ocultar formulario
                 st.rerun()
-
+            if st.button("📄 Cargar Resultados de Estudios"):
+                st.session_state.mostrar_formulario_resultados = True  # Mostrar formulario
+                st.rerun()
+    
+    # Mostrar el formulario de carga de resultados si el estado es True
+    if st.session_state.mostrar_formulario_resultados:
+        cargar_resultados()
     # Paso 4: Recomendaciones equipo
     elif st.session_state.paso_actual == 4:
         st.header("🩺 Recomendaciones para el Equipo de Salud")
@@ -420,10 +496,12 @@ def main():
         
         for rec in recomendaciones:
             st.info(rec)
-        
-        if st.button("← Volver a recomendaciones personales"):
-            st.session_state.paso_actual = 3
-            st.rerun()
+            
+            
+    
+   # if st.button("← Volver a recomendaciones personales"):
+    #        st.session_state.paso_actual = 3
+     #       st.rerun()
 
 if __name__ == "__main__":
     main()
